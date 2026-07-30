@@ -194,6 +194,21 @@
   .loading-txt { font-size: 14px; color: var(--texto-sec); }
 
   @media(max-width:720px){ .sidebar { display:none; } .main { margin-left:0; padding:20px; } }
+
+  /* MODAL DE EDIÇÃO */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(27,58,45,0.55); display: flex; align-items: center; justify-content: center; z-index: 600; padding: 20px; }
+  .modal { background: var(--branco); border-radius: 12px; padding: 28px; width: 100%; max-width: 600px; box-shadow: 0 8px 32px rgba(0,0,0,0.18); }
+  .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .modal-titulo { font-size: 17px; color: var(--verde); }
+  .modal-fechar { background: none; border: none; cursor: pointer; font-size: 22px; color: var(--texto-muted); line-height: 1; padding: 0 4px; }
+  .modal-fechar:hover { color: var(--perigo); }
+  .modal-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 24px; flex-wrap: wrap; gap: 10px; }
+  .modal-actions-right { display: flex; gap: 10px; }
+  .btn-acao { padding: 6px 10px; border-radius: 6px; font-family: Arial,sans-serif; font-size: 12px; cursor: pointer; border: 1px solid var(--bege-borda); background: var(--branco); color: var(--texto-sec); }
+  .btn-acao:hover { background: var(--verde-suave); }
+  .btn-acao.editar { color: var(--verde); border-color: var(--verde-claro); }
+  .btn-acao.excluir { color: var(--perigo); border-color: #dbb; }
+  .btn-acao.excluir:hover { background: var(--perigo-bg); }
 </style>
 </head>
 <body>
@@ -277,11 +292,12 @@
       <div class="tabela-wrap">
         <table>
           <thead><tr>
-            <th style="width:20%">Nome</th>
-            <th style="width:25%">Nº do processo</th>
-            <th style="width:25%">Vara / Comarca</th>
-            <th style="width:20%">Situação</th>
-            <th style="width:10%">Data</th>
+            <th style="width:18%">Nome</th>
+            <th style="width:23%">Nº do processo</th>
+            <th style="width:22%">Vara / Comarca</th>
+            <th style="width:18%">Situação</th>
+            <th style="width:9%">Data</th>
+            <th style="width:10%">Ações</th>
           </tr></thead>
           <tbody id="tabela-body"></tbody>
         </table>
@@ -378,6 +394,37 @@
       </div>
     </div>
   </main>
+</div>
+
+<!-- MODAL EDIÇÃO -->
+<div class="modal-overlay" id="modal-edicao" style="display:none" onclick="fecharModalFora(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-titulo">Editar processo</h2>
+      <button class="modal-fechar" onclick="fecharModal()">×</button>
+    </div>
+    <div class="form-row">
+      <div class="campo"><label>Nome da parte</label><input type="text" id="e-nome"></div>
+      <div class="campo"><label>Número do processo</label><input type="text" id="e-numero"></div>
+    </div>
+    <div class="form-row full">
+      <div class="campo"><label>Vara / Comarca</label><input type="text" id="e-vara"></div>
+    </div>
+    <div class="form-row">
+      <div class="campo"><label>Situação / Status</label><input type="text" id="e-sit"></div>
+      <div class="campo"><label>Data do compromisso</label><input type="date" id="e-data"></div>
+    </div>
+    <div class="form-row full">
+      <div class="campo"><label>Prazo / Próxima etapa</label><input type="text" id="e-prazo"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-perigo" onclick="excluirProcesso()">🗑 Excluir processo</button>
+      <div class="modal-actions-right">
+        <button class="btn btn-secundario" onclick="fecharModal()">Cancelar</button>
+        <button class="btn btn-primario" onclick="salvarEdicao()">Salvar alterações</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- LOADING -->
@@ -705,8 +752,9 @@ function renderPagina() {
 
   const tbody = document.getElementById('tabela-body');
   tbody.innerHTML = !pagina.length
-    ? '<tr class="empty-row"><td colspan="5">Nenhum processo encontrado.</td></tr>'
-    : pagina.map(p => {
+    ? '<tr class="empty-row"><td colspan="6">Nenhum processo encontrado.</td></tr>'
+    : pagina.map((p, i) => {
+        const idxReal = processos.indexOf(p);
         const dias = diasAte(p.data);
         let pillCls = '';
         if (dias!==null && dias>=0 && dias<=7) pillCls='urgente';
@@ -717,6 +765,7 @@ function renderPagina() {
           <td style="font-size:12px">${p.vara||'—'}</td>
           <td><span class="pill-status ${pillCls}" title="${p.situacao||''}">${p.situacao||'—'}</span></td>
           <td class="td-data">${fmtData(p.data)}</td>
+          <td><button class="btn-acao editar" onclick="abrirModal(${idxReal})">✏️ Editar</button></td>
         </tr>`;
       }).join('');
 
@@ -806,6 +855,61 @@ function limparForm() {
   document.getElementById('f-data').value='';
 }
 
+/* ══ MODAL DE EDIÇÃO ══ */
+let indiceEditando = -1;
+
+function abrirModal(idx) {
+  indiceEditando = idx;
+  const p = processos[idx];
+  document.getElementById('e-nome').value = p.nome || '';
+  document.getElementById('e-numero').value = p.numero || '';
+  document.getElementById('e-vara').value = p.vara || '';
+  document.getElementById('e-sit').value = p.situacao || '';
+  document.getElementById('e-data').value = p.data || '';
+  document.getElementById('e-prazo').value = p.prazo || '';
+  document.getElementById('modal-edicao').style.display = 'flex';
+}
+
+function fecharModal() {
+  document.getElementById('modal-edicao').style.display = 'none';
+  indiceEditando = -1;
+}
+
+function fecharModalFora(e) {
+  if (e.target.id === 'modal-edicao') fecharModal();
+}
+
+async function salvarEdicao() {
+  if (indiceEditando < 0) return;
+  processos[indiceEditando] = {
+    nome:     document.getElementById('e-nome').value.trim(),
+    numero:   document.getElementById('e-numero').value.trim(),
+    vara:     document.getElementById('e-vara').value.trim(),
+    situacao: document.getElementById('e-sit').value.trim(),
+    data:     document.getElementById('e-data').value,
+    prazo:    document.getElementById('e-prazo').value.trim(),
+  };
+  fecharModal();
+  showLoading('Salvando alterações…');
+  await salvarNasPlanilhas();
+  hideLoading();
+  renderTudo();
+  toast('✓ Processo atualizado com sucesso!');
+}
+
+async function excluirProcesso() {
+  if (indiceEditando < 0) return;
+  const nome = processos[indiceEditando].nome;
+  if (!confirm(`Excluir o processo de "${nome}"? Esta ação não pode ser desfeita.`)) return;
+  processos.splice(indiceEditando, 1);
+  fecharModal();
+  showLoading('Excluindo processo…');
+  await salvarNasPlanilhas();
+  hideLoading();
+  renderTudo();
+  toast('Processo excluído.');
+}
+
 /* ══ INICIALIZAÇÃO ══ */
 carregarLocal();
 renderTudo();
@@ -819,3 +923,4 @@ if (urlSalva) {
 </script>
 </body>
 </html>
+
